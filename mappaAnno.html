@@ -1,0 +1,130 @@
+<head>
+
+	<script src="https://openlayers.org/en/v4.6.5/build/ol.js"></script>
+
+    <link rel="stylesheet" href="https://openlayers.org/en/v5.1.3/css/ol.css" type="text/css">
+
+    <!-- The line below is only needed for old environments like Internet Explorer and Android 4.x -->
+
+    <script src="https://cdn.polyfill.io/v2/polyfill.min.js?features=requestAnimationFrame,Element.prototype.classList,URL"></script>
+	<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+<script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+    <link href="popup.css" rel="stylesheet">
+</head>
+<div id="map"></div>
+    <div id="popup" class="ol-popup">
+      <a href="#" id="popup-closer" class="ol-popup-closer"></a>
+      <div id="popup-content"></div>
+    </div>
+<script>
+//prendo l'anno e creo l'url corrispondente alle features volute
+var anno = location.search.substr(4);
+if(anno!="Tutti"){
+	var anno2 = parseInt(anno) + 1;
+	var url = "http://localhost:8080/geoserver/wfs?service=wfs&request=GetFeature&typeName=vss:segnalazione&outputFormat=application/json&srsname=EPSG:3857&cql_filter=data>'01.01."+anno+"'and data<'01.01."+anno2+"'";
+}
+else{
+url="http://localhost:8080/geoserver/wfs?service=wfs&request=GetFeature&typeName=vss:segnalazione&outputFormat=application/json&srsname=EPSG:3857&cql_filter=data>'01.01.1970'";
+}
+//creo una sorgente vettoriale e un layer vettoriale con stile associato
+     var vectorSource = new ol.source.Vector();
+      var vector = new ol.layer.Vector({
+        source: vectorSource,
+        style: new ol.style.Style({
+
+        image: new ol.style.Circle({
+
+          radius: 6,
+
+          fill: new ol.style.Fill({
+
+            color: '#8B0000'
+
+          }),
+
+          stroke: new ol.style.Stroke({
+
+            color: '#fff',
+
+            width: 2
+
+          })
+
+        })
+
+      })
+      });
+//prendo la mappa OSM di sfondo
+      var raster = new ol.layer.Tile({
+        source: new ol.source.OSM()
+      });
+//variabilizzo gli elementi che compongono il popup in cui metto le info della segnalazione
+      var container = document.getElementById('popup');
+      var content = document.getElementById('popup-content');
+      var closer = document.getElementById('popup-closer');
+
+//creo un overlay che mi permette di metterci il popup
+      var overlay = new ol.Overlay({
+        element: container,
+        autoPan: true,
+        autoPanAnimation: {
+          duration: 250
+        }
+      });
+//faccio in odo che il popup si chiuda con ul click sulla x
+      closer.onclick = function() {
+        overlay.setPosition(undefined);
+        closer.blur();
+        return false;
+      };
+	  //creo la mappa 
+      var map = new ol.Map({
+        layers: [raster, vector],
+		overlays: [overlay],
+        target: document.getElementById('map'),
+        view: new ol.View({
+          center: [0,0],
+          maxZoom: 19,
+          zoom: 10
+        })
+      });
+
+	  
+	      // Faccio la richiesta della feature WFS
+      var featureRequest = new ol.format.WFS().writeGetFeature({
+        srsName: 'EPSG:3003',
+        featureNS: 'http://localhost:8080/geoserver/vss',
+        featurePrefix: 'vss',
+        featureTypes: ['segnalazione'],
+        outputFormat: 'application/json',
+      });
+     // La invio e filtro e aggiungo i risultati nella sorgente vettoriale, adatto la mappa
+      fetch("http://localhost/Vss/prox.php?url="+url,{
+        method: 'POST',
+        body: new XMLSerializer().serializeToString(featureRequest)
+      }).then(function(response) {
+        return response.json();
+      }).then(function(json) {
+        var features = new ol.format.GeoJSON().readFeatures(json);
+        vectorSource.addFeatures(features);
+        map.getView().fit(vectorSource.getExtent());
+      });  
+      //al click controllo se ho selezionato una delle feature tramite le coordinate e nel caso mostro il popup con le informazioni
+      map.on('singleclick', function(evt) {
+        var coordinate = evt.coordinate;
+		 var feature = map.forEachFeatureAtPixel(evt.pixel,
+				function(feature, layer) {
+				return feature;
+				});
+		if (feature) {
+		var riparata="Sì, in data "+feature.get('data').substr(8,2)+'-'+feature.get('data').substr(5,2)+'-'+feature.get('data').substr(0,4);
+			if(feature.get('riparata')==null){
+				riparata="no";
+			}
+		var n = feature.getId().indexOf(".")+1;
+        content.innerHTML = '<p><b>Segnalazione n: '+feature.getId().substr(n)+'</b></p>'+'<b>Autore:</b> '+feature.get('autore')+'<br><b>Data:</b> '+feature.get('data').substr(8,2)+'-'+feature.get('data').substr(5,2)+'-'+feature.get('data').substr(0,4)+'<br><b>Riparata:</b> '+riparata+
+            '';
+        overlay.setPosition(coordinate);
+}
+      });
+</script>
