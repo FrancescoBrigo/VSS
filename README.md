@@ -6,5 +6,6 @@ L'applicazione web permette la gestione delle segnalazioni e l'invio delle stess
 Scritta utilizzando OpenLayers, Boostrap e Geoserver. 
 Scritta in HTML,CSS,Javascript e PHP.
 
-#Installazione
+# Installazione
+
 Copiare i file in una cartella denominata "VSS" all'interno di htdocs di XAMPP
